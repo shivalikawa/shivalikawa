@@ -1,0 +1,53 @@
+
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+# Send a GET request to the website
+url = 'https://ieg.worldbankgroup.org/data'
+response = requests.get(url)
+soup = BeautifulSoup(response.content, 'html.parser')
+
+# Find the table containing the data
+table = soup.find('table', class_='views-table cols-3')
+years = []
+independent_evaluation = []
+country_performance = []
+project_performance = []
+for row in table.find_all('tr')[1:]:
+    cells = row.find_all('td')
+    year = cells[0].text.strip()
+    i_evaluation = cells[1].text.strip()
+    c_performance = cells[2].text.strip()
+    p_performance = cells[3].text.strip()
+    years.append(year)
+ independent_evaluation.append(i_evaluation)
+ country_performance.append(c_performance)
+ project_performance.append(p_performance)
+
+# Create a DataFrame from the extracted data
+data = {
+    'Year': years,
+    'Independent Evaluation': independent_evaluation,
+    'Country Performance': country_performance,
+    'Project Performance': project_performance
+}
+df = pd.DataFrame(data)
+
+# Save the DataFrame to a CSV file
+df.to_csv('world_bank_evaluation_ratings.csv', index=False)
+
+# Print a sample of the data
+print(df.head())
+
+
+To analyze the data and present it in charts:-
+
+
+import matplotlib.pyplot as plt
+avg_evaluation = df.groupby('Year')['Independent Evaluation'].mean()
+plt.bar(avg_evaluation.index, avg_evaluation)
+plt.xlabel('Year')
+plt.ylabel('Average Evaluation Score')
+plt.title('Average Independent Evaluation Score by Year')
+plt.show()

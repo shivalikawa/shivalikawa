@@ -1,0 +1,88 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import jwt from 'jsonwebtoken';
+import cookie from 'cookie';
+import { encryptPassword, comparePasswords } from './passwordUtils'; // Import your password utility functions
+// Secret key used for JWT token signing
+const SECRET_KEY = 'your-secret-key';
+// Helper function to set cookie options
+const getCookieOptions = (subdomain) => {
+ return {
+   secure: process.env.NODE_ENV === 'production', // Set to true in production
+   httpOnly: true,
+   path: '/',
+   sameSite: 'lax',
+   domain: subdomain, // Set the domain to the desired subdomain here
+ };
+};
+const createAuthToken = (payload) => {
+ // Generate JWT token
+ return jwt.sign(payload, SECRET_KEY, { expiresIn: '1h' });
+};
+const verifyAuthToken = (token) => {
+ // Verify JWT token
+ return jwt.verify(token, SECRET_KEY);
+};
+const signIn = async (email, password, subdomain) => {
+ const user = await User.findOne({ email });
+ if (!user || !comparePasswords(password, user.password)) {
+   // Authentication failed
+   return null;
+ }
+ const payload = {
+   userId: user.id,
+   email: user.email,
+ }
+ const token = createAuthToken(payload);
+ const cookieOptions = getCookieOptions(subdomain);
+ const tokenCookie = cookie.serialize('token', token, cookieOptions);
+ return tokenCookie;
+};
+const signOut = () => {
+ const cookieOptions = getCookieOptions();
+ const tokenCookie = cookie.serialize('token', '', {
+   ...cookieOptions,
+   maxAge: -1,
+ });
+ return tokenCookie;
+};
+const protectRoute = async (req, res, next) => {
+ const cookies = cookie.parse(req.headers.cookie || '');
+ const token = cookies.token;
+ if (!token) {
+   return res.status(401).json({ message: 'Unauthorized' });
+ }
+ try {
+   const decodedToken = verifyAuthToken(token);
+   req.user = { userId: decodedToken.userId, email: decodedToken.email };
+ return next();
+ } catch {
+   // Invalid token, user is not authenticated
+   return res.status(401).json({ message: 'Unauthorized' });
+ }
+};
+export default async (req, res) => {
+ if (req.method === 'POST') {
+   const { email, password, subdomain } = req.body;
+   const tokenCookie = await signIn(email, password, subdomain);
+   if (!tokenCookie) {
+     return res.status(401).json({ message: 'Authentication failed' });
+   }
+   res.setHeader('Set-Cookie', [tokenCookie]);
+   return res.status(200).json({ message: 'Authenticated successfully' });
+ }
+ if (req.method === 'DELETE') {
+   const tokenCookie = signOut();
+   res.setHeader('Set-Cookie', [tokenCookie]);
+   return res.status(200).json({ message: 'Signed out successfully' });
+ }
+ 
+ if (req.method === 'GET') {
+   // Protected route
+   await protectRoute(req, res, () => {
+     res.status(200).json({ message: 'Authorized' });
+   });
+ }
+ res.setHeader('Allow', ['POST', 'DELETE', 'GET']);
+ res.status(405).end(`Method ${req.method}
+`signIn` and `signOut` functions to handle user authentication using email and password. The `signIn` function checks if the email and password combination is valid. The `signOut` function clears the token cookie.I have implemented the `protectRoute` middleware that verifies the JWT token in the request and sets the user details in the request object if the token is valid.
+ 
